@@ -19,7 +19,6 @@ I ([@thuarnel](https://github.com/thuarnel)) originally created this project in 
 
 * Roblox account, sign up at [roblox.com](https://www.roblox.com/)
 * A roblox game that has a team system or is custom made for the script
-  * [Phantom Forces](https://www.roblox.com/games/292439477/Phantom-Forces) is supported by default
 * **Solara** or similar
 
 ## Credits  
