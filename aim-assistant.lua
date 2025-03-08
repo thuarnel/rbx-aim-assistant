@@ -28,7 +28,6 @@ local function connect(signal, callback)
     return connection
 end
 
---- @type { new: function }
 local instance = env.Instance
 local Instance = {
     new = function(class, parent)
@@ -426,11 +425,15 @@ ui.Enabled = true
 ui.Parent = coregui
 insert(instances, ui)
 
+local pf_chars = env.pf_chars
+local pf = type(pf_chars) == 'table'
+
 local esp = true
 local ffa = true
 local fov = 4
 local sens = 0.2
 local aimbot = true
+local max_detection_range = 300
 
 local v2 = Vector2.new
 local c3u = Color3.fromRGB
@@ -575,6 +578,9 @@ local highlight = {}
 highlight.__index = highlight
 
 function highlight.new(player)
+	if pf then
+		return
+	end
     if content[player] then
         return content[player]
     end
@@ -640,19 +646,25 @@ end
 
 local function get_enemy_characters()
     local enemy_characters = {}
-    for _, enemy_player in pairs(get_enemy_players()) do
-        local enemy_character = enemy_player.Character
-        local enemy_humanoid = typeof(enemy_character) == 'Instance' and rbxclasschild(enemy_character, 'Humanoid')
-        if (enemy_humanoid and enemy_humanoid.Health > 0) or not enemy_humanoid then
-            insert(enemy_characters, enemy_character)
-        end
-    end
+	if pf then
+		for _, enemy_character in pairs(pf_chars) do
+			insert(enemy_characters, enemy_character)
+		end
+	else
+		for _, enemy_player in pairs(get_enemy_players()) do
+			local enemy_character = enemy_player.Character
+			local enemy_humanoid = typeof(enemy_character) == 'Instance' and rbxclasschild(enemy_character, 'Humanoid')
+			if (enemy_humanoid and enemy_humanoid.Health > 0) or not enemy_humanoid then
+				insert(enemy_characters, enemy_character)
+			end
+		end
+	end
     return enemy_characters
 end
 
 local function get_nearest_character(current_target)
     local nearest_character, nearest_screenpoint
-    local closest_distance = 2048
+    local closest_distance = max_detection_range
     local camera_position = currentcamera.CFrame.Position
     for _, character in pairs(get_enemy_characters()) do
         local local_entry
@@ -663,13 +675,27 @@ local function get_nearest_character(current_target)
                 break
             end
         end
-        local head = rbxchild(character, 'Head') or rbxchild(character, 'HumanoidRootPart')
+        local head
+		
+		if pf then
+			for _, part in pairs(character:GetChildren()) do
+				if part:IsA('BasePart') and part.Size.X == part.Size.Y and part.Size.Y == part.Size.Z then
+					head = part
+					break
+				end
+			end
+		else
+			head = rbxchild(character, 'Head') or rbxchild(character, 'HumanoidRootPart')
+		end
+		
         if typeof(head) == 'Instance' and rbxclass(head, 'BasePart') then
             local screen_position, on_screen = currentcamera:WorldToScreenPoint(head.Position)
             local screen_distance = (v2(playermouse.X, playermouse.Y) - v2(screen_position.X, screen_position.Y))
                 .Magnitude
             if on_screen then
-                local_entry:enabled(can_track(local_entry.player))
+				if not pf then
+                	local_entry:enabled(can_track(local_entry.player))
+				end
                 local hit = raycast(
                     workspace,
                     ray(camera_position, (head.Position - camera_position).Unit * 2048),
@@ -683,11 +709,11 @@ local function get_nearest_character(current_target)
                         local_color_selection = color_scheme['valid']
                     end
                 end
-            else
+            elseif not pf then
                 local_entry:enabled(false)
             end
         end
-        if current_target ~= nearest_character then
+        if not pf and current_target ~= nearest_character then
             local_entry:color(local_color_selection)
         end
     end
@@ -827,15 +853,16 @@ end)
 connect(service("RunService").Stepped, function(time, delta_time)
     current_target = nearest_character
     nearest_character, nearest_screenpoint = get_nearest_character(current_target)
-    if aimbot and (mousebutton1down or mousebutton2down) and nearest_character and nearest_screenpoint and
-        (time > last_time + frame_delta or delta_time > frame_delta) then
+    if aimbot and (mousebutton1down or mousebutton2down) and nearest_character and (time > last_time + frame_delta or delta_time > frame_delta) then
         last_time = time
         nearest_player = players:GetPlayerFromCharacter(nearest_character)
-        if nearest_player then
+        if not pf and nearest_player then
             content[nearest_player]:color(color_scheme['nearest'])
         end
-        mousemoverel((nearest_screenpoint.X - playermouse.X) * sens, (nearest_screenpoint.Y - playermouse.Y) * sens)
-        ui_circle.Position = UDim2.fromOffset(nearest_screenpoint.X, nearest_screenpoint.Y)
+        if typeof(nearest_screenpoint) == 'Vector3' then
+            mousemoverel((nearest_screenpoint.X - playermouse.X) * sens, (nearest_screenpoint.Y - playermouse.Y) * sens)
+            ui_circle.Position = UDim2.fromOffset(nearest_screenpoint.X, nearest_screenpoint.Y)
+        end
     end
 end)
 
